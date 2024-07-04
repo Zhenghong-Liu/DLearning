@@ -9,7 +9,6 @@ by Zhenghong Liu
 从而让模型理解时间的概念，从而根据不同的时间预测噪声。
 """
 
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -159,7 +158,7 @@ class Unet(nn.Module):
 
 if __name__ == '__main__':
     model = Unet(3, 3)
-    x = torch.randn(3, 3, 128, 128)
+    x = torch.randn(3, 3, 32, 32)
     t = torch.randn(3)
     output = model(x, t)
     print(output.size())

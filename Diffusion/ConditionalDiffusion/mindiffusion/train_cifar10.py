@@ -63,7 +63,7 @@ def train_cifar10(
             ddpm.eval()
             with torch.no_grad():
                 xh = ddpm.sample(8, (3, 32, 32), device)
-                xset = torch.cat([img[:8], xh], 0) #上面8个是生成的图像, 下面8个是真实的图像
+                xset = torch.cat([img[:8], xh], 0) #上面8个是真实的图像, 下面8个是生成的图像
                 grid = make_grid(xset, nrow=4, normalize=True, value_range=(-1, 1))
                 save_image(grid, f"./contents/ddpm_sample_cifar{i}.png")
 

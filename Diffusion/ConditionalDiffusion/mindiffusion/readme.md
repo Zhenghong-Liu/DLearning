@@ -18,3 +18,7 @@ sqrt_alphabar_t    ：$\sqrt{\bar{\alpha_t}}$
 sqrt_1m_alphabar_t    ：$\sqrt{1-\bar{\alpha_t}}$
 
 omabt_over_sqrt_1m_alphabar_t    ：$\frac{1 - \alpha_t}{\sqrt{1-\bar{\alpha_t}}}$
+
+
+![assert/ddpm_sample_cifar94.png](assert/ddpm_sample_cifar94.png)
+![assert/mnist_ddpm_sample99.png](assert/mnist_ddpm_sample99.png)

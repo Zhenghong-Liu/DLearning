@@ -19,7 +19,7 @@ def ddpm_schedules(beta1:float, beta2:float, T:int) -> Dict[str, torch.tensor]:
 
     beta_t = (beta2 - beta1) * torch.arange(0, T+1, dtype=torch.float32) / T + beta1 #这里torch.arange(0, T+1)是从0到T，共T+1个数
     sqrt_beta_t = torch.sqrt(beta_t)
-    alpha_t = 1.0 - sqrt_beta_t
+    alpha_t = 1.0 - beta_t
 
     alphabar_t = torch.cumprod(alpha_t, dim=0) #这里是对alpha_t进行累乘
 
@@ -28,7 +28,7 @@ def ddpm_schedules(beta1:float, beta2:float, T:int) -> Dict[str, torch.tensor]:
 
     #用于Sample过程
     oneover_sqrt_alpha_t = 1.0 / torch.sqrt(alpha_t)
-    omabt_over_sqrt_1m_alphabar_t = (1.0 - alphabar_t) / sqrt_1m_alphabar_t
+    omabt_over_sqrt_1m_alphabar_t = (1.0 - alpha_t) / sqrt_1m_alphabar_t
 
     return {
         "alpha_t": alpha_t,
