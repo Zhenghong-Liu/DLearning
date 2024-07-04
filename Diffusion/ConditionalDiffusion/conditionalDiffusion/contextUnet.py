@@ -143,8 +143,8 @@ class ContextUnet(nn.Module):
         c = F.one_hot(c, num_classes=self.n_classes).type(torch.float)
 
         #maskout context if context_mask == 1
-        context_mask = context_mask[:, None]
-        context_mask = context_mask.repeat(1, self.n_classes)
+        context_mask = context_mask[:, None] #增加一个维度,[batch_size] -> [batch_size, 1]
+        context_mask = context_mask.repeat(1, self.n_classes) # [batch_size, 1] -> [batch_size, n_classes], 记住Number of dimensions of repeat dims can not be smaller than number of dimensions of tensor
         context_mask = (1 - context_mask) # 1 -> 0, 0 -> 1
         c = c * context_mask
 

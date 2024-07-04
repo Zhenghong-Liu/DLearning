@@ -15,6 +15,8 @@
 
 &#9744; OCR（图片转文字）
 
+&#9744; 流模型Glow，RF：https://github.com/cloneofsimo/minRF?tab=readme-ov-file
+
 &#9745;
 &#10004;
 &cross;

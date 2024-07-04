@@ -94,7 +94,7 @@ class DDPM(nn.Module):
         context_mask = torch.zeros_like(c_i).to(device)
 
         #double the batch
-        ci = c_i.repeat(2)
+        c_i = c_i.repeat(2)
         context_mask = context_mask.repeat(2)
         context_mask[n_sample:] = 1.0
 
@@ -110,7 +110,7 @@ class DDPM(nn.Module):
 
             z = torch.randn(n_sample, *size, device=device) if i > 1 else 0
 
-            eps = self.eps_model(x_i, ci, t_is, context_mask)
+            eps = self.eps_model(x_i, c_i, t_is, context_mask)
             eps1 = eps[:n_sample]
             eps2 = eps[n_sample:]
             eps = (1 + guide_w) * eps1 - guide_w * eps2
