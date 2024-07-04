@@ -1,8 +1,11 @@
+参考链接：https://github.com/cloneofsimo/minDiffusion
 这是一个使用diffusion重建mnist和cifar10的例子。
 
 只不过是没有condition的。
 
 这个文件相比于之前实现的DDPM文件，应该是代码量更小。
+
+![img.png](assert/img.png)
 
 
 alpha_t    ：$\alpha_t$

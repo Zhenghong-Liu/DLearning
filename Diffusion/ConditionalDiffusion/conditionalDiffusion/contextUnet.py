@@ -1,7 +1,12 @@
 """
-Math2Latex UNet.py
-2024年06月30日
+Math2Latex TEmbdUnet.py
+2024年07月04日
 by Zhenghong Liu
+"""
+
+"""
+需要对Unet进行修改，需要加上t的时间嵌入。
+从而让模型理解时间的概念，从而根据不同的时间预测噪声。
 """
 
 import torch
@@ -9,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class DoubleConv(nn.Module):
-    "conv => BN => ReLU => conv => BN => ReLU"
+    "conv => BN => GELU => conv => BN => GELU"
 
     def __init__(self, input_channels, output_channels, middle_channels=None):
         super(DoubleConv, self).__init__()
@@ -20,10 +25,10 @@ class DoubleConv(nn.Module):
             # 卷积后面如果接norm，那么最好就把bias转为False，因为这样可以节省内存，还不影响结果。
             nn.Conv2d(input_channels, middle_channels, kernel_size=3, padding=1, stride=1, bias=False), #bias默认为True
             nn.BatchNorm2d(middle_channels),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Conv2d(middle_channels, output_channels, kernel_size=3, padding=1, stride=1, bias=False),
             nn.BatchNorm2d(output_channels),
-            nn.ReLU(),
+            nn.GELU(),
         )
 
     def forward(self, x):
@@ -80,10 +85,30 @@ class OutConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+class EmbedFC(nn.Module):
+    def __init__(self, input_dim, emb_dim):
+        super(EmbedFC, self).__init__()
+        '''
+        generic one layer FC NN for embedding things  
+        '''
+        self.input_dim = input_dim
+        layers = [
+            nn.Linear(input_dim, emb_dim),
+            nn.GELU(),
+            nn.Linear(emb_dim, emb_dim),
+        ]
+        self.model = nn.Sequential(*layers)
 
-class Unet(nn.Module):
-    def __init__(self, input_channels, output_channels, bilinear = False):
-        super(Unet, self).__init__()
+    def forward(self, x):
+        x = x.view(-1, self.input_dim)
+        return self.model(x)
+
+
+class ContextUnet(nn.Module):
+    def __init__(self, input_channels, output_channels, n_classes, bilinear = False):
+        super(ContextUnet, self).__init__()
+        self.n_classes = n_classes
+
         self.input_channels = input_channels
         self.output_channels = output_channels
         self.bilinear = bilinear
@@ -100,46 +125,39 @@ class Unet(nn.Module):
         self.up4 = Up(128, 64, bilinear)
         self.outc = OutConv(64, output_channels)
 
-    def forward(self, x):
+        self.timeembd1 = EmbedFC(1, 512)
+        self.timeembd2 = EmbedFC(1, 256)
+        self.contextembd1 = EmbedFC(n_classes, 512)
+        self.contextembd2 = EmbedFC(n_classes, 256)
+
+    def forward(self, x, c, t, context_mask):
+        #x是噪声图像，c是标签，t是时间
+        #context_mask是一个mask
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
         x4 = self.down3(x3)
-        x5 = self.down4(x4)
-        x = self.up1(x5, x4)
-        x = self.up2(x, x3)
-        x = self.up3(x, x2)
+        hiddenvec = self.down4(x4)
+
+        #将c转换为onehot编码
+        c = F.one_hot(c, num_classes=self.n_classes).type(torch.float)
+
+        #maskout context if context_mask == 1
+        context_mask = context_mask[:, None]
+        context_mask = context_mask.repeat(1, self.n_classes)
+        context_mask = (1 - context_mask) # 1 -> 0, 0 -> 1
+        c = c * context_mask
+
+        #将c和t转换为embedding
+        cemb1 = self.contextembd1(c).view(-1, 512, 1, 1)
+        cemb2 = self.contextembd2(c).view(-1, 256, 1, 1)
+        temb1 = self.timeembd1(t).view(-1, 512, 1, 1)
+        temb2 = self.timeembd2(t).view(-1, 256, 1, 1)
+
+
+        x = self.up1(hiddenvec, x4)
+        x = self.up2(x * cemb1 + temb1, x3)
+        x = self.up3(x * cemb2 + temb2, x2)
         x = self.up4(x, x1)
         output = self.outc(x)
         return output
-
-    def use_checkpointing(self):
-        '''
-        这个技术主要用于训练时内存优化，它允许我们以计算时间为代价，减少训练深度网络时的内存占用。
-        使用梯度检查点技术可以在训练大型模型时减少显存的占用，但由于在反向传播时额外的重新计算，它会增加一些计算成本
-        '''
-        self.inc = torch.utils.checkpoint(self.inc)
-        self.down1 = torch.utils.checkpoint(self.down1)
-        self.down2 = torch.utils.checkpoint(self.down2)
-        self.down3 = torch.utils.checkpoint(self.down3)
-        self.down4 = torch.utils.checkpoint(self.down4)
-        self.up1 = torch.utils.checkpoint(self.up1)
-        self.up2 = torch.utils.checkpoint(self.up2)
-        self.up3 = torch.utils.checkpoint(self.up3)
-        self.up4 = torch.utils.checkpoint(self.up4)
-        self.outc = torch.utils.checkpoint(self.outc)
-
-
-
-
-if __name__ == '__main__':
-    model = Unet(3, 3)
-    x = torch.randn(1, 3, 128, 128)
-    output = model(x)
-    print(output.shape)
-
-    from torchsummary import summary
-    summary(model, input_size=(3, 128, 128), device='cpu')
-
-
-
