@@ -61,7 +61,7 @@ print(f"x shape : {x.shape}, y_pred shape : {y_pred.shape}, y_sigma shape : {y_s
 x = x.reshape(-1)
 y_pred = y_pred.reshape(-1)
 y_sigma = y_sigma.reshape(-1)
-plt.fill_between(x, y_pred - y_sigma, y_pred + y_sigma, alpha=0.8, label="1 sigma", color='yellow')
+plt.fill_between(x, y_pred - y_sigma, y_pred + y_sigma, alpha=0.8, label="1 sigma", color='orange')
 plt.fill_between(x, y_pred - 2 * y_sigma, y_pred + 2 * y_sigma, alpha=0.2, label="2 sigma", color='blue')
 plt.legend()
 plt.show()
