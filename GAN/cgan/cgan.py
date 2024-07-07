@@ -59,9 +59,9 @@ class Generator(nn.Module):
             nn.Tanh()
         )
 
-    def forward(self, nois, labels):
+    def forward(self, noise, labels):
         # Concatenate label embedding and image to produce input
-        gen_input = torch.cat((self.label_emb(labels), nois), -1)
+        gen_input = torch.cat((self.label_emb(labels), noise), -1)
         img = self.model(gen_input)
         img = img.view(img.size(0), *img_shape)
         return img
