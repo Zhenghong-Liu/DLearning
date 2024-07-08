@@ -1,0 +1,1 @@
+sh datasets/down.sh apple2orange  #这样就下载了apple2orange数据集
