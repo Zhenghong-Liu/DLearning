@@ -20,6 +20,14 @@ from discriminator import Discriminator, weights_init_normal
 from utils import *
 from datasets import ImageDataset
 
+#===============================================================================
+# 经过实践发现，这个训练是非常慢的。
+# 可以尝试一下换一个unet
+# cyclegan的训练通常需要小的学习率，大概在0.0002左右，而且训练时间也比较长，通常需要几天的时间。
+# 我推荐使用batch size为1，这样可以有更多次数的backward。
+# 我实验感觉是当batch size为1时，生成效果最好。
+#===============================================================================
+
 
 if not os.path.exists('images'):
     os.makedirs('images')
@@ -31,7 +39,7 @@ if not os.path.exists('saved_models'):
 epoch = 0
 num_epochs = 200
 decay_epoch = 100
-batch_size = 1
+batch_size = 1 #cyclegan通常使用1作为batch_size，这样训练单张图像可以更好的保持细节和特征，而且增加了backward的次数。
 learning_rate = 0.0002
 img_height = 256
 img_width = 256
@@ -64,10 +72,10 @@ G_BA.to(device)
 D_A.to(device)
 D_B.to(device)
 
-G_AB.apply(weights_init_normal)
-G_BA.apply(weights_init_normal)
-D_A.apply(weights_init_normal)
-D_B.apply(weights_init_normal)
+# G_AB.apply(weights_init_normal)
+# G_BA.apply(weights_init_normal)
+# D_A.apply(weights_init_normal)
+# D_B.apply(weights_init_normal)
 
 #Optimizer
 optimizer_G = torch.optim.Adam( #itertools.chain()可以将多个迭代器合并成一个迭代器
@@ -156,6 +164,9 @@ for epoch in range(start_epoch, num_epochs):
         G_BA.train()
         optimizer_G.zero_grad()
         #Identity loss
+        # 生成器G_BA用来生成A风格的图片，那么把real_A输入到G_BA中，应该仍然得到real_A
+        # 只有这样才能证明G具有生成y风格的能力。因此，我们需要计算G_BA(real_A)和real_A之间的L1损失
+        # 如果不加该loss，那么生成器可能会自主的修改图像的色调，使得整体的颜色产生变化。
         loss_id_A = criterion_identity(G_BA(real_A), real_A)
         loss_id_B = criterion_identity(G_AB(real_B), real_B)
 
