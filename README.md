@@ -9,9 +9,9 @@
 
 &#9745; VAE
 
-&#9744; 在EM算法中，添加MCMC内容。
+&#9745; 在EM算法中，添加MCMC内容。
 
-&#9744; 各种GAN（pix2pix, cycleGan, StyleGan, StarGan）
+&#9745; 各种GAN（pix2pix, cycleGan, StyleGan, StarGan）
 
 &#9744; OCR（图片转文字）
 
