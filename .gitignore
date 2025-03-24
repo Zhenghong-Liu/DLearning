@@ -7,3 +7,4 @@ GAN/stylegan/__pycache__/
 EM/理解EM算法/gmm_animation.gif
 .vscode/
 OCR/CAPTCHA/ctc.pth
+OCR/Flickr8k/ImageCaptioningKaggle/attention_model_state.pth
