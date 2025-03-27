@@ -1,4 +1,5 @@
 # DL-Learning
+
 神经网络模型学习仓库
 
 &#9745; BNN贝叶斯神经网络
@@ -16,6 +17,12 @@
 &#9744; OCR（图片转文字）
 
 &#9744; 流模型Glow，RF：https://github.com/cloneofsimo/minRF?tab=readme-ov-file
+
+latent-diffusion
+
+transformer image to txt
+
+autoVC 无监督的方法进行语音分离
 
 &#9745;
 &#10004;
