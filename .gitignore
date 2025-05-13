@@ -10,3 +10,7 @@ OCR/CAPTCHA/ctc.pth
 OCR/Flickr8k/ImageCaptioningKaggle/attention_model_state.pth
 OCR/Flickr8k/Transformer/transformer_model_updated.pth
 OCR/Flickr8k/Transformer/mine_transformer_model.pth
+data/
+
+基础算法/遗传算法绘图/images/
+基础算法/遗传算法绘图/.ipynb_checkpoints/GeneticDraw-checkpoint.ipynb
