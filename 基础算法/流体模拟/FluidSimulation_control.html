@@ -1,0 +1,584 @@
+<!--
+Copyright 2022 Matthias Müller - Ten Minute Physics, 
+www.youtube.com/c/TenMinutePhysics
+www.matthiasMueller.info/tenMinutePhysics
+
+MIT License
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+
+<!DOCTYPE html>
+<html>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+	<head>
+		<title>Euler Fluid</title>
+		<style>
+			body {
+				font-family: verdana; 
+				font-size: 15px;
+			}			
+			.button {
+				background-color: #606060;
+				border: none;
+				color: white;
+				padding: 10px 10px;
+				font-size: 16px;
+				margin: 4px 2px;
+				cursor: pointer;
+			}
+			canvas {
+				border-radius: 20px;
+			}
+		</style>
+	</head>
+	
+<body>
+
+	<button class="button" onclick="setupScene(1)">Wind Tunnel</button>
+	<input type = "checkbox" id = "streamButton" onclick = "scene.showStreamlines = !scene.showStreamlines">Streamlines
+	<input type = "checkbox" name = "field" id = "smokeButton" onclick = "scene.showSmoke = !scene.showSmoke;" checked>Smoke
+	<input type = "checkbox" id = "overrelaxButton" onclick = "scene.overRelaxation = scene.overRelaxation == 1.0 ? 1.9 : 1.0" checked>Overrelax
+	<br>
+	<canvas id="myCanvas" style="border:2px solid"></canvas>
+	
+<script>
+
+	var canvas = document.getElementById("myCanvas");
+	var c = canvas.getContext("2d");	
+	canvas.width = window.innerWidth - 20;
+	canvas.height = window.innerHeight - 100;
+
+	canvas.focus();
+
+	var simHeight = 1.1;	
+	var cScale = canvas.height / simHeight;
+	var simWidth = canvas.width / cScale;
+
+	var U_FIELD = 0;
+	var V_FIELD = 1;
+	var S_FIELD = 2;
+
+	var cnt = 0;
+
+	function cX(x) {
+		return x * cScale;
+	}
+
+	function cY(y) {
+		return canvas.height - y * cScale;
+	}
+
+	// ----------------- start of simulator ------------------------------
+
+	class Fluid{
+		constructor(density, numX, numY, h) {
+			this.density = density; // Fluid density
+			this.numX = numX + 2; 
+			this.numY = numY + 2;
+			this.numCells = this.numX * this.numY;  // total number of cells
+			this.h = h; //Cell size in simulation units
+			
+			this.u = new Float32Array(this.numCells); //Horizontal velocity
+			this.v = new Float32Array(this.numCells); //Vertical velocity
+			this.newU = new Float32Array(this.numCells);
+			this.newV = new Float32Array(this.numCells);
+			this.p = new Float32Array(this.numCells);  //Pressure
+			this.s = new Float32Array(this.numCells); //Solidity (0=solid, 1=fluid)
+			this.m = new Float32Array(this.numCells);  //Smoke density
+			this.newM = new Float32Array(this.numCells);
+			
+			this.m.fill(1.0)
+			// this.s.fill(0.0)
+		}
+		
+		IDX(i, j){
+			return i * this.numY + j;
+		}
+		
+		samplefield(i, j, field, dt){
+			var h = this.h
+			var h1 = this.h
+			var h2 = 0.5 * this.h
+			
+			switch (field) {
+				case U_FIELD: f = this.u; break;
+				case V_FIELD: f = this.v; break;
+				case S_FIELD: f = this.m; break
+			}
+			
+			var x = i * h1 + h2
+			var y = j * h1 + h2
+			var v = this.v[this.IDX(i,j)]
+			var u = this.u[this.IDX(i,j)]
+			
+			var origin_x = x - u * dt;
+			var origin_y = y - v * dt;
+			
+			// Clamp coordinates within simulation domain
+			origin_x = Math.max(Math.min(origin_x, this.numX * h), h);
+			origin_y = Math.max(Math.min(origin_y, this.numY * h), h);
+			
+			// 寻找空间点所在的离散坐标
+			origin_x = (origin_x - h2) / h1;
+			origin_y = (origin_y - h2) / h1;
+			var x0 = Math.floor(origin_x);
+			var tx = origin_x - x0;
+			var x0 = Math.min(x0, this.numX-1);
+			var x1 = Math.min(x0+1, this.numX-1);
+			
+			var y0 = Math.floor(origin_y);
+			var ty = origin_y - y0;
+			var y0 = Math.min(y0, this.numY-1);
+			var y1 = Math.min(y0+1, this.numY-1);
+			
+			var sx = 1.0 - tx;
+			var sy = 1.0 - ty;
+			
+			var val= f[this.IDX(x0, y0)] * sx * sy + 
+					f[this.IDX(x0, y1)] * sx * ty + 
+					f[this.IDX(x1, y0)] * tx * sy + 
+					f[this.IDX(x1, y1)] * tx * ty;
+			
+			
+			return val
+		}
+		
+		
+		
+		solveIncompressibility(numIters, dt) {
+			
+			var cp = this.density * this.h / dt
+			for (var iter=0; iter<numIters; iter++){
+				for (var i=1; i< this.numX-1; i++) {
+					for (var j=1; j<this.numY-1; j++){
+						if (this.s[this.IDX(i, j)] == 0.0)
+							continue
+							
+						var sx0 = this.s[this.IDX(i-1, j)]
+						var sx1 = this.s[this.IDX(i+1, j)]
+						var sy1 = this.s[this.IDX(i, j-1)]
+						var sy2 = this.s[this.IDX(i, j+1)]
+						var s = sx0 + sx1 + sy1 + sy2;
+						
+						if (s == 0.0)
+							continue
+							
+						var div = this.u[this.IDX(i+1, j)] - this.u[this.IDX(i, j)] + this.v[this.IDX(i, j+1)] - this.v[this.IDX(i, j)]
+						
+						var p = div / s
+						p *= scene.overRelaxation
+						// this.p[this.IDX(i, j)] -= p * cp
+						
+						this.u[this.IDX(i, j)] += sx0 * p
+						this.u[this.IDX(i+1, j)] -= sx1 * p
+						this.v[this.IDX(i, j)] += sy1 * p
+						this.v[this.IDX(i, j+1)] -= sy2 * p
+					}
+				}
+			}
+		}
+		
+		
+		boundary(){
+			for (var i=0; i < this.numX; i++){
+				this.u[this.IDX(i, 0)] = this.u[this.IDX(i, 1)];
+				this.u[this.IDX(i, this.numY-1)] = this.u[this.IDX(i, this.numY-2)];
+			}
+			for (var j=0; j< this.numY; j++){
+				this.v[this.IDX(0, j)] = this.v[this.IDX(1, j)]
+				this.v[this.IDX(this.numX-1, j)] = this.v[this.IDX(this.numX-2, j)]
+			}
+					
+		}
+		
+		
+		advertVel(dt) {
+			this.newU.set(this.u)
+			this.newV.set(this.v)
+			
+			for (var i=1; i < this.numX; i++) {
+				for (var j=1; j < this.numY; j++) {
+					if (this.s[this.IDX(i, j)] != 0.0 && this.s[this.IDX(i-1, j)] !=0.0 && j < this.numY-1){
+								
+						this.newU[this.IDX(i, j)] = this.samplefield(i,j, U_FIELD, dt);
+						
+					}
+					// updata v field
+					if (this.s[this.IDX(i, j)] != 0.0 && this.s[this.IDX(i, j-1)] !=0.0 && i < this.numX-1){
+						
+						this.newV[this.IDX(i, j)] = this.samplefield(i, j, V_FIELD, dt);
+					}
+						
+				}
+				
+			}
+			this.u.set(this.newU);
+			this.v.set(this.newV);
+		}
+		
+		advertSmoke(dt){
+			this.newM.set(this.m);
+			for (var i=1; i < this.numX-1; i++) {
+				for (var j=1; j < this.numY-1; j++) {
+					if (this.s[this.IDX(i,j)] == 0.0)
+						continue
+				
+					this.newM[this.IDX(i, j)] = this.samplefield(i, j, S_FIELD, dt);
+				}
+			}
+			this.m.set(this.newM);	
+		}
+		
+		simulate(dt, grivity, numIters){
+			this.p.fill(0.0);
+			this.solveIncompressibility(numIters, dt);
+			// this.clean_divergence2(numIters, dt);
+			// this.solveIncompressibility_Collocated(numIters, dt);
+			
+			this.boundary();
+			this.advertVel(dt);
+			this.advertSmoke(dt);
+		}
+	}
+
+	var scene = 
+	{
+		gravity : -9.81,
+		dt : 1.0 / 120.0,
+		numIters : 100,
+		frameNr : 0,
+		overRelaxation : 1.9,
+		obstacleX : 0.0,
+		obstacleY : 0.0,
+		obstacleRadius: 0.15,
+		paused: false,
+		sceneNr: 0,
+		showObstacle: false,
+		showStreamlines: false,
+		showSmoke: true,
+		fluid: null
+	};
+
+	function setupScene(sceneNr = 0) 
+	{
+		scene.sceneNr = sceneNr;
+		scene.obstacleRadius = 0.15;
+		scene.overRelaxation = 1.9;
+
+		scene.dt = 1.0 / 60.0;
+		scene.numIters = 40;
+
+		var res = 100;
+
+		var domainHeight = 1.0;
+		var domainWidth = domainHeight / simHeight * simWidth;
+		var h = domainHeight / res;
+
+		var numX = Math.floor(domainWidth / h);
+		var numY = Math.floor(domainHeight / h);
+
+		var density = 1000.0;
+
+		f = scene.fluid = new Fluid(density, numX, numY, h);
+
+		var n = f.numY;
+
+		if (sceneNr == 1) { // vortex shedding
+
+			var inVel = 2.0;
+			for (var i = 0; i < f.numX; i++) {
+				for (var j = 0; j < f.numY; j++) {
+					var s = 1.0;	// fluid
+					if (i == 0 || j == 0 || j == f.numY-1)
+						s = 0.0;	// solid
+					f.s[i*n + j] = s
+
+					if (i == 1) {
+						f.u[i*n + j] = inVel;
+					}
+				}
+			}
+
+			var pipeH = 0.1 * f.numY;
+			var minJ = Math.floor(0.5 * f.numY - 0.5*pipeH);
+			var maxJ = Math.floor(0.5 * f.numY + 0.5*pipeH);
+
+			for (var j = minJ; j < maxJ; j++)
+				f.m[j] = 0.0;
+
+			setObstacle(0.4, 0.5, true)
+
+			scene.gravity = 0.0;
+			scene.showSmoke = true;
+			scene.showStreamlines = false;
+
+		}
+
+		document.getElementById("streamButton").checked = scene.showStreamlines;
+		document.getElementById("smokeButton").checked = scene.showSmoke;
+		document.getElementById("overrelaxButton").checked = scene.overRelaxation > 1.0;
+		
+	}
+
+
+	// draw -------------------------------------------------------
+
+	function draw() 
+	{
+		c.clearRect(0, 0, canvas.width, canvas.height);
+
+		c.fillStyle = "#FF0000";
+		f = scene.fluid;
+		n = f.numY;
+
+		var cellScale = 1.1;
+
+		var h = f.h;
+
+		minP = f.p[0];
+		maxP = f.p[0];
+
+		for (var i = 0; i < f.numCells; i++) {
+			minP = Math.min(minP, f.p[i]);
+			maxP = Math.max(maxP, f.p[i]);
+		}
+
+		id = c.getImageData(0,0, canvas.width, canvas.height)
+
+		var color = [255, 255, 255, 255]
+
+		for (var i = 0; i < f.numX; i++) {
+			for (var j = 0; j < f.numY; j++) {
+
+				if (scene.showSmoke) {
+					var s = f.m[i*n + j];
+					color[0] = 255*s;
+					color[1] = 255*s;
+					color[2] = 255*s;
+				}
+
+				var x = Math.floor(cX(i * h));
+				var y = Math.floor(cY((j+1) * h));
+				var cx = Math.floor(cScale * cellScale * h) + 1;
+				var cy = Math.floor(cScale * cellScale * h) + 1;
+
+				r = color[0];
+				g = color[1];
+				b = color[2];
+
+				for (var yi = y; yi < y + cy; yi++) {
+					var p = 4 * (yi * canvas.width + x)
+
+					for (var xi = 0; xi < cx; xi++) {
+						id.data[p++] = r;
+						id.data[p++] = g;
+						id.data[p++] = b;
+						id.data[p++] = 255;
+					}
+				}
+			}
+		}
+
+		c.putImageData(id, 0, 0);
+		
+		if (scene.showStreamlines) {
+
+			var segLen = f.h * 0.2;
+			var numSegs = 15;
+
+			c.strokeStyle = "#000000";
+
+			for (var i = 1; i < f.numX - 1; i += 5) {
+				for (var j = 1; j < f.numY - 1; j += 5) {
+
+					var x = (i + 0.5) * f.h;
+					var y = (j + 0.5) * f.h;
+
+					c.beginPath();
+					c.moveTo(cX(x), cY(y));
+
+					for (var n = 0; n < numSegs; n++) {
+						var u = f.sampleField(x, y, U_FIELD);
+						var v = f.sampleField(x, y, V_FIELD);
+						l = Math.sqrt(u*u + v*v);
+						// x += u/l * segLen;
+						// y += v/l * segLen;
+						x += u * 0.01;
+						y += v * 0.01;
+						if (x > f.numX * f.h)
+							break;
+
+						c.lineTo(cX(x), cY(y));
+					}
+					c.stroke();
+				}
+			}
+		}
+
+		if (scene.showObstacle) {
+
+			c.strokeW
+			r = scene.obstacleRadius + f.h;
+			c.fillStyle = "#DDDDDD";
+			
+			c.beginPath();	
+			c.arc(
+				cX(scene.obstacleX), cY(scene.obstacleY), cScale * r, 0.0, 2.0 * Math.PI); 
+			c.closePath();
+			c.fill();
+
+			c.lineWidth = 3.0;
+			c.strokeStyle = "#000000";
+			c.beginPath();	
+			c.arc(
+				cX(scene.obstacleX), cY(scene.obstacleY), cScale * r, 0.0, 2.0 * Math.PI); 
+			c.closePath();
+			c.stroke();
+			c.lineWidth = 1.0;
+		}
+
+	}
+
+	function setObstacle(x, y, reset) {
+		// console.log(x, y)
+		var vx = 0.0;
+		var vy = 0.0;
+
+		if (!reset) {
+			vx = (x - scene.obstacleX) / scene.dt;
+			vy = (y - scene.obstacleY) / scene.dt;
+		}
+
+		scene.obstacleX = x;
+		scene.obstacleY = y;
+		var r = scene.obstacleRadius;
+		var f = scene.fluid;
+		var n = f.numY;
+		var cd = Math.sqrt(2) * f.h;
+
+		for (var i = 1; i < f.numX-2; i++) {
+			for (var j = 1; j < f.numY-2; j++) {
+
+				f.s[i*n + j] = 1.0;
+
+				dx = (i + 0.5) * f.h - x;
+				dy = (j + 0.5) * f.h - y;
+
+				if (dx * dx + dy * dy < r * r) {
+					f.s[i*n + j] = 0.0;
+					f.m[i*n + j] = 1.0;
+					
+					f.u[i*n + j] = vx;
+					f.u[(i+1)*n + j] = vx;
+					f.v[i*n + j] = vy;
+					f.v[i*n + j+1] = vy;
+				}
+			}
+		}
+		
+		scene.showObstacle = true;
+	}
+
+	// interaction -------------------------------------------------------
+
+	var mouseDown = false;
+
+	function startDrag(x, y) {
+		let bounds = canvas.getBoundingClientRect();
+
+		let mx = x - bounds.left - canvas.clientLeft;
+		let my = y - bounds.top - canvas.clientTop;
+		mouseDown = true;
+
+		x = mx / cScale;
+		y = (canvas.height - my) / cScale;
+
+		setObstacle(x,y, true);
+	}
+
+	function drag(x, y) {
+		if (mouseDown) {
+			let bounds = canvas.getBoundingClientRect();
+			let mx = x - bounds.left - canvas.clientLeft;
+			let my = y - bounds.top - canvas.clientTop;
+			x = mx / cScale;
+			y = (canvas.height - my) / cScale;
+			setObstacle(x,y, false);
+		}
+	}
+
+	function endDrag() {
+		mouseDown = false;
+	}
+
+	canvas.addEventListener('mousedown', event => {
+		startDrag(event.x, event.y);
+	});
+
+	canvas.addEventListener('mouseup', event => {
+		endDrag();
+	});
+
+	canvas.addEventListener('mousemove', event => {
+		drag(event.x, event.y);
+	});
+
+	canvas.addEventListener('touchstart', event => {
+		startDrag(event.touches[0].clientX, event.touches[0].clientY)
+	});
+
+	canvas.addEventListener('touchend', event => {
+		endDrag()
+	});
+
+	canvas.addEventListener('touchmove', event => {
+		event.preventDefault();
+		event.stopImmediatePropagation();
+		drag(event.touches[0].clientX, event.touches[0].clientY)
+	}, { passive: false});
+
+
+	document.addEventListener('keydown', event => {
+		switch(event.key) {
+			case 'p': scene.paused = !scene.paused; break;
+			case 'm': scene.paused = false; simulate(); scene.paused = true; break;
+		}
+	});
+
+	function toggleStart()
+	{
+		var button = document.getElementById('startButton');
+		if (scene.paused)
+			button.innerHTML = "Stop";
+		else
+			button.innerHTML = "Start";
+		scene.paused = !scene.paused;
+	}
+
+	// main -------------------------------------------------------
+
+	function simulate() 
+	{
+		if (!scene.paused)
+			scene.fluid.simulate(scene.dt, scene.gravity, scene.numIters)
+			scene.frameNr++;
+	}
+
+	function update() {
+		simulate();
+		draw();
+		requestAnimationFrame(update);
+	}
+	
+	setupScene(1);
+	update();
+	
+</script> 
+</body>
+</html>
