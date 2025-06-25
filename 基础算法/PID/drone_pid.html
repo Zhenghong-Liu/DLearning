@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>drone_pid</title>
+		<style type="text/css">
+			body {
+				margin: 0;
+				overflow: hidden;
+				display: flex;
+				flex-direction: column; /* Changed to column to stack controls and canvas */
+				justify-content: center;
+				align-items: center;
+				min-height: 100vh;
+				/* background-color: #f0f0f0; */
+				background-color: #88ada6;
+				font-family: 'Inter', sans-serif;
+			}
+			#myCanvas{
+				border: 1px solid #ccc;
+				background-color: #e6f7ff;
+				/* background-color: #88ada6; */
+				box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+				border-radius: 10px;
+			}
+			.controls {
+				margin-bottom: 20px;
+				padding: 15px;
+				background-color: #e0e0e0;
+				border-radius: 10px;
+				box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+				display: flex;
+				gap: 20px;
+				align-items: center;
+				flex-wrap: wrap; /* Allow controls to wrap on smaller screens */
+			}
+			.control-group {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 5px;
+			}
+			.control-group label {
+				font-weight: bold;
+				color: #333;
+			}
+			.control-group input[type="range"] {
+				width: 150px;
+				-webkit-appearance: none; /* Override default slider styles */
+				appearance: none;
+				height: 8px;
+				background: #d3d3d3;
+				outline: none;
+				opacity: 0.7;
+				-webkit-transition: .2s;
+				transition: opacity .2s;
+				border-radius: 5px;
+			}
+			.control-group input[type="range"]::-webkit-slider-thumb {
+				-webkit-appearance: none;
+				appearance: none;
+				width: 20px;
+				height: 20px;
+				border-radius: 50%;
+				background: #4CAF50;
+				cursor: pointer;
+				box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+			}
+			.control-group input[type="range"]::-moz-range-thumb {
+				width: 20px;
+				height: 20px;
+				border-radius: 50%;
+				background: #4CAF50;
+				cursor: pointer;
+				box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+			}
+			.control-group span {
+				font-size: 0.9em;
+				color: #555;
+				min-width: 30px; /* Ensure space for value display */
+				text-align: center;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="controls rounded-lg shadow-md">
+			<div class="control-group">
+				<label for="kpSlider">P 增益:</label>
+				<input type="range" id="kpSlider" min="0" max="3" step="0.01" value="2">
+				<span id="kpValue">2.00</span>
+			</div>
+			<div class="control-group">
+				<label for="kiSlider">I 增益:</label>
+				<input type="range" id="kiSlider" min="0" max="0.2" step="0.001" value="0.1">
+				<span id="kiValue">0.100</span>
+			</div>
+			<div class="control-group">
+				<label for="kdSlider">D 增益:</label>
+				<input type="range" id="kdSlider" min="0" max="15" step="0.01" value="10">
+				<span id="kdValue">10.00</span>
+			</div>
+		</div>
+		<canvas id="myCanvas"></canvas>
+		<script>
+			const canvas = document.getElementById("myCanvas");
+			const ctx = canvas.getContext('2d');
+			
+			// 设置画布的大小
+			canvas.width = window.innerWidth * 0.8;
+			canvas.height = window.innerHeight * 0.7;
+			
+			// 设置变量
+			const DRONE_WIDTH = 180;
+			const DRONE_HEIGHT = 90;
+			let drone_y = canvas.height / 2;
+			let drone_velocity_y = 0;
+			const DT = 1;
+			
+			// 物理变量
+			const GRAVITY = 0.98;
+			const DRONE_WEIGHT = 1;
+			
+			// PID 参数
+			let KP = 2;
+			let KI = 0.1;
+			let KD = 10;
+			
+			// 误差
+			let target_y = drone_y;
+			let previous_error = 0;
+			let integral_error = 0;
+			const MAX_INTERGRAL_ERROR = 1000; // 限制积分误差，防止积分饱和
+			
+			// 加载无人机图像
+			const drone_img = new Image();
+			drone_img.src = "./drone.png";
+			
+			
+			function draw(){
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				
+				// 绘制那条target的直线
+				ctx.strokeStyle = 'rgba(255, 0, 0, 0.7)';
+				ctx.lineWidth = 2;
+				ctx.setLineDash([5, 5]);
+				ctx.beginPath();
+				ctx.moveTo(0, target_y);
+				ctx.lineTo(canvas.width, target_y);
+				ctx.stroke()
+				ctx.setLineDash([]);  // 恢复实线
+				
+				if (drone_img.complete) {
+					// 绘制无人机
+					ctx.drawImage(
+						drone_img, 
+						canvas.width / 2 - DRONE_WIDTH / 2, 
+						drone_y - DRONE_HEIGHT / 2, 
+						DRONE_WIDTH, 
+						DRONE_HEIGHT
+					);
+					
+				} else {
+					// 备用方案：如果图像未加载，绘制矩形
+					ctx.fillStyle = 'rgba(65, 105, 225, 0.9)'; // 皇家蓝
+					ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+					ctx.shadowBlur = 10;
+					ctx.shadowOffsetX = 3;
+					ctx.shadowOffsetY = 3;
+					ctx.fillRect(canvas.width / 2 - DRONE_WIDTH / 2, drone_y - DRONE_HEIGHT / 2, DRONE_WIDTH, DRONE_HEIGHT);
+					
+				}
+				
+				
+			}
+			
+			function pid(){
+				const error = target_y - drone_y;
+				integral_error = integral_error + error;
+				// 积分饱和限制
+				integral_error = Math.max(-MAX_INTERGRAL_ERROR, Math.min(integral_error, MAX_INTERGRAL_ERROR));
+				
+				const derivative = (error - previous_error) / DT;
+				const output = KP * error + KI * integral_error + KD * derivative;
+				
+				// 更新合力
+				const net_output = output - (GRAVITY * DRONE_HEIGHT);
+				// 更新速度
+				drone_velocity_y += (net_output / DRONE_HEIGHT) * DT;
+				// 更新位置
+				drone_y += drone_velocity_y * DT;
+				
+				previous_error = error;
+			}
+			
+			function animate(){
+				pid();
+				draw();
+				requestAnimationFrame(animate);
+			}
+			
+			// 鼠标点击的监听
+			canvas.addEventListener('click', (event)=>{
+				target_y = event.clientY - canvas.getBoundingClientRect().top;
+				// 点击后重置积分项和微分项，避免“积分饱和”
+				integralError = 0;
+				previousError = 0;
+			})
+			
+			// PID 滑动条事件监听
+			const kpSlider = document.getElementById('kpSlider');
+			const kiSlider = document.getElementById('kiSlider');
+			const kdSlider = document.getElementById('kdSlider');
+			const kpValueSpan = document.getElementById('kpValue');
+			const kiValueSpan = document.getElementById('kiValue');
+			const kdValueSpan = document.getElementById('kdValue');
+	
+			kpSlider.addEventListener('input', (event) => {
+				KP = parseFloat(event.target.value);
+				kpValueSpan.textContent = KP.toFixed(2);
+			});
+			kiSlider.addEventListener('input', (event) => {
+				KI = parseFloat(event.target.value);
+				kiValueSpan.textContent = KI.toFixed(3); // 积分项可能很小，显示更多小数位
+			});
+			kdSlider.addEventListener('input', (event) => {
+				KD = parseFloat(event.target.value);
+				kdValueSpan.textContent = KD.toFixed(2);
+			});
+			
+			// 开始动画
+			drone_img.onload = () => {
+				draw();
+				animate();
+			};
+			
+			// 如果图片加载失败，仍然启动动画
+			drone_img.onerror = () => {
+				console.log("Drone image failed to load, using rectangle instead");
+				draw();
+				animate();
+			};
+			
+			
+		</script>
+	</body>
+</html>
