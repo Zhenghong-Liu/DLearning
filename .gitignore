@@ -15,3 +15,5 @@ EM/MCMC/天统课程代码
 
 基础算法/遗传算法绘图/images/
 基础算法/遗传算法绘图/.ipynb_checkpoints/GeneticDraw-checkpoint.ipynb
+ReinforcementLearning/DQN_DINO/chromedriver
+ReinforcementLearning/DQN_DINO/assert/dino6_accelerate_dqn_900.pth
