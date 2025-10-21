@@ -17,3 +17,16 @@ EM/MCMC/天统课程代码
 基础算法/遗传算法绘图/.ipynb_checkpoints/GeneticDraw-checkpoint.ipynb
 ReinforcementLearning/DQN_DINO/chromedriver
 ReinforcementLearning/DQN_DINO/assert/dino6_accelerate_dqn_900.pth
+ReinforcementLearning/DQN_DINO/assert/dino.mp4
+ReinforcementLearning/AlphaZero/othello-backend/temp000/
+ReinforcementLearning/AlphaZero/othello-backend/__pycache__/
+ReinforcementLearning/AlphaZero/othello-frontend/node_modules/
+ReinforcementLearning/AlphaZero/othello-frontend/public/
+ReinforcementLearning/AlphaZero/othello-frontend/babel.config.js
+ReinforcementLearning/AlphaZero/othello-frontend/package-lock.json
+ReinforcementLearning/AlphaZero/othello-frontend/package.json
+ReinforcementLearning/AlphaZero/othello-frontend/.gitignore
+ReinforcementLearning/AlphaZero/othello-frontend/vue.config.js
+ReinforcementLearning/AlphaZero/othello-frontend/jsconfig.json
+ReinforcementLearning/AlphaZero/othello-frontend/src/assets/
+ReinforcementLearning/AlphaZero/othello-backend/temp/best.pth.tar
