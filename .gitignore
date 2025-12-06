@@ -30,3 +30,7 @@ ReinforcementLearning/AlphaZero/othello-frontend/vue.config.js
 ReinforcementLearning/AlphaZero/othello-frontend/jsconfig.json
 ReinforcementLearning/AlphaZero/othello-frontend/src/assets/
 ReinforcementLearning/AlphaZero/othello-backend/temp/best.pth.tar
+PINN/NS_PINN/curl_field_with_streamline.gif
+PINN/NS_PINN/p_field.gif
+PINN/NS_PINN/curl_field_with_streamline.mp4
+PINN/NS_PINN/cylinder_wake.mat
